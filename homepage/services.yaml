@@ -1,0 +1,27 @@
+- Sistema:
+    - Ventas (Odoo):
+        href: https://ventas.dros.cl
+        description: Punto de venta, inventario y facturación
+    - Reportes (Superset):
+        href: https://reportes.dros.cl
+        description: Dashboards y consultas
+    - Automatizaciones (n8n):
+        href: https://automatizacion.dros.cl
+        description: Flujos automáticos
+
+- Infraestructura:
+    - Monitoreo:
+        href: https://monitoreo.dros.cl
+        description: Estado de los servicios
+    - Claves:
+        href: https://claves.dros.cl
+        description: Gestor de contraseñas
+    - DNS local:
+        href: https://dns.dros.cl
+        description: AdGuard Home
+    - pgAdmin:
+        href: https://pgadmin.dros.cl
+        description: Administración de Postgres
+    - Portainer:
+        href: https://portainer.dros.cl
+        description: Contenedores y logs

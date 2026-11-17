@@ -1,0 +1,48 @@
+# HTTPS interno: Caddy usa su propia CA (no sale a internet ni necesita dominio público).
+# Hay que instalar su certificado raíz en los equipos (ver LEEME.md, paso 7).
+{
+	local_certs
+}
+
+ventas.dros.cl {
+	encode gzip
+	# Odoo corre sin workers (modo por defecto de tu compose): websocket y longpolling van por el 8069.
+	reverse_proxy odoo:8069
+}
+
+reportes.dros.cl {
+	encode gzip
+	reverse_proxy superset:8088
+}
+
+automatizacion.dros.cl {
+	reverse_proxy n8n:5678
+}
+
+pgadmin.dros.cl {
+	reverse_proxy pgadmin:80
+}
+
+portainer.dros.cl {
+	reverse_proxy https://portainer:9443 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
+}
+
+monitoreo.dros.cl {
+	reverse_proxy uptime-kuma:3001
+}
+
+claves.dros.cl {
+	reverse_proxy vaultwarden:80
+}
+
+dns.dros.cl {
+	reverse_proxy adguard:3000
+}
+
+inicio.dros.cl {
+	reverse_proxy homepage:3000
+}

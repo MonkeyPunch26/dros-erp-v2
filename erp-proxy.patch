@@ -1,0 +1,31 @@
+diff --git a/docker-compose.yml b/docker-compose.yml
+--- a/docker-compose.yml	2026-11-12 10:51:53.511977268 -0300
++++ b/docker-compose.yml	2026-11-12 10:51:53.504774057 -0300
+@@ -37,6 +37,7 @@
+       USER: odoo
+       PASSWORD: ${ODOO_DB_PASSWORD}
+       TZ: America/Santiago
++    command: ["odoo", "--proxy-mode"]
+     volumes:
+       - odoo_data:/var/lib/odoo
+       - ./odoo/addons:/mnt/extra-addons
+@@ -62,6 +63,9 @@
+       GENERIC_TIMEZONE: America/Santiago
+       TZ: America/Santiago
+       N8N_SECURE_COOKIE: "false"
++      N8N_PROXY_HOPS: "1"
++      N8N_EDITOR_BASE_URL: https://automatizacion.dros.cl/
++      WEBHOOK_URL: https://automatizacion.dros.cl/
+     volumes:
+       - n8n_data:/home/node/.n8n
+     networks: [erp-network]
+diff --git a/superset/superset_config.py b/superset/superset_config.py
+--- a/superset/superset_config.py	2026-11-12 10:51:53.512052971 -0300
++++ b/superset/superset_config.py	2026-11-12 10:51:53.504886139 -0300
+@@ -48,3 +48,6 @@
+ 
+ CELERY_CONFIG = CeleryConfig
+ FEATURE_FLAGS = {"ALERT_REPORTS": True}
++
++# Detrás de Caddy (reverse proxy)
++ENABLE_PROXY_FIX = True

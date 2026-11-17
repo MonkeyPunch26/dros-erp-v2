@@ -1,0 +1,141 @@
+# Servicios extra para el servidor dros-servidor
+# Se levantan APARTE del stack del ERP, pero se conectan a su misma red de Docker.
+#   docker compose -f docker-compose.extras.yml --env-file .env up -d
+#
+# Incluye: Caddy (proxy + HTTPS), AdGuard Home (DNS local), Uptime Kuma (monitoreo),
+#          Vaultwarden (claves), Homepage (portada), respaldos de Postgres y restic.
+
+name: dros-extras
+
+networks:
+  erp:
+    external: true
+    name: ${ERP_NETWORK}   # red "erp-network" de tu stack; Docker la nombra <carpeta>_erp-network
+
+volumes:
+  caddy-data:
+  caddy-config:
+  kuma-data:
+  vw-data:
+  odoo-filestore:
+    external: true
+    name: ${ODOO_DATA_VOLUME}   # volumen donde Odoo guarda /var/lib/odoo (ver: docker volume ls)
+  n8n-data:
+    external: true
+    name: ${N8N_DATA_VOLUME}    # volumen de n8n (/home/node/.n8n)
+
+services:
+  # ---------- Proxy inverso con HTTPS interno ----------
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - ODOO_HOST=${ODOO_HOST:-odoo}
+      - SUPERSET_HOST=${SUPERSET_HOST:-superset}
+      - N8N_HOST=${N8N_HOST:-n8n}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [erp]
+    mem_limit: 128m
+
+  # ---------- DNS local (ventas.dros.cl -> IP del servidor) ----------
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "3000:3000/tcp"   # panel (se usa directo por IP la primera vez; luego por dns.dros.cl)
+    volumes:
+      - ./adguard/work:/opt/adguardhome/work
+      - ./adguard/conf:/opt/adguardhome/conf
+    networks: [erp]
+    mem_limit: 256m
+
+  # ---------- Monitoreo ----------
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - kuma-data:/app/data
+    networks: [erp]
+    mem_limit: 256m
+
+  # ---------- Gestor de claves ----------
+  vaultwarden:
+    image: vaultwarden/server:latest   # cuando todo ande, fija una versión concreta
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      - DOMAIN=https://claves.dros.cl
+      - SIGNUPS_ALLOWED=false          # las cuentas se crean por invitación desde /admin
+      - ADMIN_TOKEN=${VW_ADMIN_TOKEN}
+      - TZ=${TZ:-America/Santiago}
+    volumes:
+      - vw-data:/data
+    networks: [erp]
+    mem_limit: 128m
+
+  # ---------- Portada con links ----------
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    environment:
+      - HOMEPAGE_ALLOWED_HOSTS=inicio.dros.cl
+    volumes:
+      - ./homepage:/app/config
+    networks: [erp]
+    mem_limit: 256m
+
+  # ---------- Respaldo diario de Postgres (pg_dump) ----------
+  pgbackup:
+    image: prodrigestivill/postgres-backup-local:${PG_VERSION:-16}
+    container_name: pgbackup
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=${PG_HOST}
+      - POSTGRES_DB=${PG_DATABASES}     # varias separadas por coma: odoo,superset,n8n
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+      - SCHEDULE=0 3 * * *              # todos los días 03:00
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - TZ=${TZ:-America/Santiago}
+    volumes:
+      - ${BACKUP_DIR:-/mnt/respaldo}/postgres:/backups
+    networks: [erp]
+    mem_limit: 256m
+
+  # ---------- Respaldo cifrado e incremental (filestore de Odoo, n8n, dumps) ----------
+  restic:
+    image: mazzolino/restic:latest
+    container_name: restic
+    hostname: dros-servidor
+    restart: unless-stopped
+    environment:
+      - RUN_ON_STARTUP=false
+      - BACKUP_CRON=30 3 * * *
+      - RESTIC_REPOSITORY=/restic-repo   # luego puedes cambiarlo a b2:bucket:ruta (ver LEEME)
+      - RESTIC_PASSWORD=${RESTIC_PASSWORD}
+      - RESTIC_BACKUP_SOURCES=/data
+      - RESTIC_FORGET_ARGS=--keep-daily 7 --keep-weekly 4 --keep-monthly 6
+      - TZ=${TZ:-America/Santiago}
+    volumes:
+      - odoo-filestore:/data/odoo-filestore:ro
+      - n8n-data:/data/n8n:ro
+      - ${ERP_DIR}:/data/erp-stack:ro   # carpeta del repo: .env (claves), compose y módulos propios (odoo/addons)
+      - ${BACKUP_DIR:-/mnt/respaldo}/postgres:/data/pg-dumps:ro
+      - ${BACKUP_DIR:-/mnt/respaldo}/restic:/restic-repo
+    networks: [erp]
+    mem_limit: 256m
